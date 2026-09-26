@@ -1,48 +1,82 @@
 "use client";
 import { useEffect, useState } from "react";
+import Icon from "./Icon";
+import { site } from "../lib/site";
+import { trackEvent } from "../lib/track";
 
 export default function ScrollUtils() {
-  const [showFloating, setShowFloating] = useState(false);
+  const [pastHero, setPastHero] = useState(false);
+  const [formVisible, setFormVisible] = useState(false);
 
   useEffect(() => {
-    // Scroll reveal
-    const observer = new IntersectionObserver(
+    // Scroll-Reveal
+    const revealObserver = new IntersectionObserver(
       (entries) => {
         entries.forEach((e) => {
           if (e.isIntersecting) {
             e.target.classList.add("visible");
+            revealObserver.unobserve(e.target);
           }
         });
       },
-      { threshold: 0.1, rootMargin: "0px 0px -40px 0px" }
+      { threshold: 0.12, rootMargin: "0px 0px -40px 0px" },
     );
-    document.querySelectorAll(".reveal").forEach((el) => observer.observe(el));
+    document.querySelectorAll(".reveal").forEach((el) => revealObserver.observe(el));
 
-    // Floating CTA visibility
-    const handleScroll = () => setShowFloating(window.scrollY > 700);
-    window.addEventListener("scroll", handleScroll, { passive: true });
+    // Mobile CTA-Leiste: erst nach dem Hero einblenden, beim Formular wieder ausblenden.
+    const sectionObserver = new IntersectionObserver((entries) => {
+      entries.forEach((e) => {
+        if (e.target.id === "top") setPastHero(!e.isIntersecting);
+        if (e.target.id === "analyse") setFormVisible(e.isIntersecting);
+      });
+    });
+    ["top", "analyse"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) sectionObserver.observe(el);
+    });
+
+    // CTA-Klicks für GTM/Google Ads auswerten (Elemente mit data-cta).
+    const onClick = (e) => {
+      const cta = e.target.closest?.("[data-cta]");
+      if (cta) trackEvent("cta_click", { cta_location: cta.dataset.cta });
+    };
+    document.addEventListener("click", onClick);
 
     return () => {
-      observer.disconnect();
-      window.removeEventListener("scroll", handleScroll);
+      revealObserver.disconnect();
+      sectionObserver.disconnect();
+      document.removeEventListener("click", onClick);
     };
   }, []);
 
+  const showBar = pastHero && !formVisible;
+
   return (
-    <>
-      {/* Floating CTA */}
-      {showFloating && (
+    <div
+      className={`fixed inset-x-0 bottom-0 z-40 border-t border-navy-100 bg-white/95 p-3 shadow-[0_-12px_32px_-12px_rgba(11,28,55,0.25)] backdrop-blur transition-transform duration-500 ease-out md:hidden ${
+        showBar ? "translate-y-0" : "translate-y-full"
+      }`}
+      aria-hidden={!showBar}
+      inert={!showBar}
+    >
+      <div className="flex gap-3">
         <a
-          href="#kontakt"
-          className="fixed bottom-6 right-6 z-50 btn-cta text-white font-bold text-sm px-5 py-3.5 rounded-full shadow-2xl flex items-center gap-2 animate-fade-in-up"
-          aria-label="Kostenlose Beratung anfordern"
+          href="#analyse"
+          className="btn-signal arrow-nudge flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3.5 font-bold"
+          data-cta="mobile-bar"
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.11 12 19.79 19.79 0 0 1 1.04 3.38A2 2 0 0 1 3 1.22h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
-          </svg>
-          Jetzt anfragen
+          Kostenlose Analyse starten
+          <Icon name="arrow-right" className="size-5" strokeWidth={2.5} />
         </a>
-      )}
-    </>
+        <a
+          href={site.phone.href}
+          className="grid size-[52px] shrink-0 place-items-center rounded-xl bg-navy-900 text-white"
+          aria-label={`Anrufen: ${site.phone.display}`}
+          data-cta="mobile-bar-phone"
+        >
+          <Icon name="phone" className="size-5" />
+        </a>
+      </div>
+    </div>
   );
 }
